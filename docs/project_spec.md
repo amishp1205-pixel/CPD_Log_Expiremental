@@ -117,6 +117,8 @@ A "Download" button saves the final entry as a plain text (.txt) file.
 | AI / LLM | Anthropic Claude API | Selected for strong instruction-following and structured output generation. Well suited to producing consistently formatted CPD entries. |
 | Database | None (MVP) | No user accounts or persistent storage in the MVP. Entries are generated, edited, and downloaded within a single session. |
 | State (optional) | Browser localStorage | Can preserve form draft state if the user navigates away mid-session, without requiring a database. |
+| Unit Testing | Jest | Tests individual functions in isolation: prompt assembly, form validation, download helper, and API route handler. |
+| E2E Testing | Playwright + Playwright MCP | End-to-end browser tests for full user flows. Playwright MCP allows Claude to interact with the running app in a real browser during development for verification and debugging. |
 
 ### Technical Architecture
 
@@ -169,10 +171,58 @@ Before building, set up the following:
 - [ ] API key — Anthropic API key (add as a Replit Secret, not hardcoded)
 - [ ] Reference examples — Convert the PDFs in `cpd examples/` to plain text files and place them in the project (e.g. `server/examples/`)
 - [ ] Domain name — Optional. Replit provides a `.replit.dev` URL by default.
+- [ ] Playwright — Run `npx playwright install` to download browsers before running E2E tests.
 
 ---
 
-## 5. Non-Functional Requirements
+## 5. Testing Strategy
+
+Testing is organised into three layers. Together, the unit and E2E suites form the regression suite and should be run before every commit.
+
+### 5.1 Unit Tests — Jest
+
+Tests individual functions in isolation. No browser or running server required.
+
+| Area | What is tested |
+|---|---|
+| Prompt assembly | Given a learning type and a set of answers, the function that builds the Anthropic API prompt returns the correct string — correct question labels, reference examples injected, and learning type noted. |
+| Form validation | All 7 fields are required. Submitting with any field empty is blocked client-side; the API is never called with incomplete data. |
+| Download helper | The function that triggers a browser .txt download receives the correct text content and filename. |
+| API route handler | The Express `/api/generate-cpd` route correctly forwards the request to Anthropic and returns the parsed response. Tested with a mocked Anthropic client — no real API calls during unit tests. |
+
+**Run:** `npm test`
+
+### 5.2 End-to-End Tests — Playwright + Playwright MCP
+
+Tests the full application in a real browser. Catches issues that unit tests miss: component wiring, UI state transitions, and real network behaviour.
+
+| Test scenario | What is asserted |
+|---|---|
+| Planned learning happy path | User clicks "Record Learning" → selects Planned → fills all 7 questions → submits → loading state appears → CPD entry is displayed → entry is editable → download produces a valid .txt file. |
+| Unplanned learning happy path | Same flow as above but with Unplanned selected. Q2 text and placeholder differ from the Planned flow. |
+| Learning type switcher | Selecting Planned vs Unplanned updates Q2 in the form. The other 6 questions remain unchanged. |
+| Loading state | A visible loading indicator appears immediately on submit and disappears once the response is rendered. The Submit button is disabled during loading. |
+| Empty form blocked | Submitting the form with one or more fields empty does not trigger an API call; a validation message is shown. |
+| API key not leaked | A Playwright network intercept confirms that no request from the browser contains the Anthropic API key. |
+
+**Playwright MCP** is used during development to let Claude interact with the running app in a real browser — navigating pages, clicking elements, reading text, and taking screenshots — for ad-hoc verification and debugging without writing a formal test script.
+
+**Run:** `npx playwright test` (headless) or `npx playwright test --ui` (interactive)
+
+### 5.3 Regression Suite
+
+The Jest unit suite and the Playwright E2E suite together constitute the regression suite. Run both before every commit, and at minimum after any change to:
+
+- Form logic or question sets
+- Prompt assembly or API route
+- Download functionality
+- UI state transitions (loading, validation)
+
+If either suite fails, the commit should not proceed until the failure is resolved or explicitly understood.
+
+---
+
+## 6. Non-Functional Requirements
 
 - **Security** — The Anthropic API key must never be exposed to the browser. All AI calls go through the Express backend.
 - **Responsiveness** — The form and output should work well on both desktop and mobile browsers.
@@ -181,7 +231,7 @@ Before building, set up the following:
 
 ---
 
-## 6. Out of Scope
+## 7. Out of Scope
 
 The following are explicitly not part of the MVP or near-term roadmap unless noted in Future Versions:
 
@@ -196,7 +246,7 @@ The following are explicitly not part of the MVP or near-term roadmap unless not
 
 ---
 
-## 7. Open Items / Pre-Build Tasks
+## 8. Open Items / Pre-Build Tasks
 
 These must be resolved before development begins:
 

@@ -41,7 +41,8 @@ Returned to React frontend → user edits → downloads as .txt
 | AI / LLM | Anthropic Claude API |
 | Database | None (MVP) |
 | Linting | ESLint + Prettier |
-| Testing | Jest (unit tests) |
+| Unit Testing | Jest |
+| E2E Testing | Playwright + Playwright MCP |
 
 **Key rule:** The Anthropic API key lives server-side only (Replit Secret). It must never be referenced in any frontend code.
 
@@ -97,6 +98,15 @@ npx prettier --write .
 
 # Build for production (if needed for Replit deploy)
 npm run build
+
+# Install Playwright browsers (first time only)
+npx playwright install
+
+# Run E2E tests (headless)
+npx playwright test
+
+# Run E2E tests in interactive UI mode
+npx playwright test --ui
 ```
 
 > These commands assume the standard Replit Node.js project structure. Adjust if the scaffolding differs.
@@ -105,26 +115,52 @@ npm run build
 
 ## 7. Testing Instructions
 
-**Framework:** Jest
+Testing has three layers: unit, E2E, and regression. Full detail is in [docs/project_spec.md — Section 5](docs/project_spec.md).
 
-**Scope for MVP — unit test the following:**
-1. Prompt assembly — given a learning type and a set of answers, the function that builds the Anthropic API prompt produces the expected string (includes the reference examples and the correct question set).
-2. Form validation — required fields are caught before submission; the form does not call the API with empty answers.
-3. Download logic — the generated text is correctly written to a .txt file via the browser download mechanism.
+---
 
-**How to run:**
+### 7.1 Unit Tests — Jest
+
+Tests individual functions. No browser or server needed.
+
+**What to test:**
+1. **Prompt assembly** — learning type + answers → correct prompt string with reference examples injected.
+2. **Form validation** — required fields enforced; API not called with empty data.
+3. **Download helper** — correct .txt blob and filename generated.
+4. **API route handler** — Express route returns correct JSON from a mocked Anthropic client.
+
+**Run:**
 ```bash
 npm test
 ```
 
-**Manual test checklist (run through before calling the MVP done):**
-- [ ] "Record Learning" button is visible on the landing page
-- [ ] Selecting "Planned" vs "Unplanned" shows the correct question set (Q2 differs)
-- [ ] Submitting the form shows a loading state
-- [ ] A CPD entry is generated and displayed in an editable text area
-- [ ] The user can modify the generated text
-- [ ] Clicking "Download" saves a valid .txt file with the current content
-- [ ] The Anthropic API key is not visible anywhere in the browser (check Network tab, page source, and React DevTools)
+---
+
+### 7.2 E2E Tests — Playwright + Playwright MCP
+
+Tests the full app in a real browser. Test files live in `e2e/` (or `tests/` — match whatever Playwright scaffolding uses).
+
+**What to test:**
+- Planned learning happy path (fill form → generate → edit → download)
+- Unplanned learning happy path (same flow, Q2 differs)
+- Learning type switcher correctly updates Q2
+- Loading state appears on submit, Submit button disabled during load
+- Empty form validation blocks submission
+- Network intercept confirms API key is not leaked to the browser
+
+**Run:**
+```bash
+npx playwright test          # headless
+npx playwright test --ui     # interactive UI mode
+```
+
+**Playwright MCP during development:** Use Playwright MCP to let Claude navigate the running app, click elements, read content, and take screenshots — useful for quick verification and debugging without writing a full test script each time.
+
+---
+
+### 7.3 Regression Suite
+
+Both the Jest suite and the Playwright suite together form the regression suite. Run both before every commit — especially after changes to form logic, prompt assembly, the API route, or any UI state transition. Block the commit if either suite fails.
 
 ---
 
